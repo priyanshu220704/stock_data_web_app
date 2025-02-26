@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nifty Data Chart</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .sidebar h1 {
+            font-size: 22px;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #f39c12;
+        }
+
+        select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+        }
+
+        select {
+            background: white;
+            color: #333;
+        }
+
+        button {
+            background: #f39c12;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background: #e67e22;
+        }
+
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background: white;
+            box-shadow: -3px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-container {
+            width: 90%;
+            max-width: 900px;
+            height: 500px;
+            position: relative;
+        }
+
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h1>Nifty Stocks</h1>
+        <select id="indexSelect"></select>
+        <button onclick="fetchData()">Get Data</button>
+    </div>
+
+    <div class="main-content">
+        <div class="chart-container">
+            <canvas id="chartCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let chartInstance = null;
+
+        async function loadIndices() {
+            try {
+                const response = await fetch("/indices");
+                const indices = await response.json();
+                const select = document.getElementById("indexSelect");
+                select.innerHTML = "";
+
+                indices.forEach(index => {
+                    const option = document.createElement("option");
+                    option.value = index;
+                    option.textContent = index;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Error loading indices:", error);
+            }
+        }
+
+        async function fetchData() {
+            const indexName = document.getElementById("indexSelect").value;
+            const encodedIndexName = encodeURIComponent(indexName);
+
+            try {
+                const response = await fetch(`/data/${encodedIndexName}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error("Error fetching data:", data.error);
+                    return;
+                }
+
+                updateChart(data);
+            } catch (error) {
+                console.error("Error fetching data:", error);
+            }
+        }
+
+        function updateChart(data) {
+            const ctx = document.getElementById("chartCanvas").getContext("2d");
+
+            const labels = data.map(entry => entry.index_date);
+            const closeValues = data.map(entry => entry.closing_index_value);
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: "Closing Value",
+                        data: closeValues,
+                        borderColor: "#3498db",
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: "nearest",
+                        intersect: false,
+                        axis: "x",
+                    },
+                    plugins: {
+                        legend: {
+                            position: "top"
+                        },
+                        tooltip: {
+                            enabled: true,
+                            mode: "index",
+                            intersect: false,
+                            callbacks: {
+                                label: function(tooltipItem) {
+                                    let value = tooltipItem.raw;
+                                    let label = tooltipItem.dataset.label || "";
+                                    return `${label}: ${value}`;
+                                },
+                                title: function(tooltipItem) {
+                                    return "Date: " + tooltipItem[0].label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: "Date" },
+                            grid: { display: false }
+                        },
+                        y: {
+                            title: { display: true, text: "Index Value" }
+                        }
+                    },
+                    elements: {
+                        point: {
+                            radius: 4, 
+                            hoverRadius: 6,
+                        },
+                        line: {
+                            tension: 0.2
+                        }
+                    }
+                }
+            });
+        }
+
+        window.onload = loadIndices;
+    </script>
+</body>
+</html>
